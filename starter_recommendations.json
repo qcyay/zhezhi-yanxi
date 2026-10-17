@@ -1,0 +1,41 @@
+[
+  {
+    "id": "starter0",
+    "title": "国家数据局：全国已建成高质量数据集超12.6万个",
+    "date": "2026-08-29",
+    "type": "news",
+    "url": "https://www.nda.gov.cn/sjj/swdt/mtsy/0829/20260829095557774013837_pc.html",
+    "source": "国家数据局",
+    "abstract": "介绍高质量数据集建设进展及其对人工智能发展的支撑作用，可作为数据治理与数据质量研究的背景材料。",
+    "abstract_kind": "编辑导读 · 核验于2026-10-17",
+    "topic": "数据治理",
+    "related_files": [],
+    "recommendation_reason": "首次使用导读；尚未根据你的个人记录排序。"
+  },
+  {
+    "id": "starter1",
+    "title": "关于征求《数据 基础术语》等22项国家标准意见的通知",
+    "date": "2026-04-07",
+    "type": "policy",
+    "url": "https://www.nda.gov.cn/sjj/zwgk/tzgg/0407/20260407213420895658136_mobile.html",
+    "source": "国家数据局",
+    "abstract": "公开征求22项数据领域国家标准草案的意见，附有标准文本。当前链接对应征求意见材料，不能作为已经生效的标准使用。",
+    "abstract_kind": "编辑导读 · 核验于2026-10-17",
+    "topic": "数据治理",
+    "related_files": [],
+    "recommendation_reason": "首次使用导读；尚未根据你的个人记录排序。"
+  },
+  {
+    "id": "starter2",
+    "title": "建设高质量科学数据集 推动科学研究范式创新",
+    "date": "2026-06-12",
+    "type": "news",
+    "url": "https://www.nda.gov.cn/sjj/zwgk/zjjd/0612/20260612130421574712806_pc.html",
+    "source": "国家数据局",
+    "abstract": "专家解读科学数据集的建设路径，讨论校准、标注、关联与质量控制对科学研究的作用。适合了解科研数据治理的应用背景。",
+    "abstract_kind": "编辑导读 · 核验于2026-10-17",
+    "topic": "数据治理",
+    "related_files": [],
+    "recommendation_reason": "首次使用导读；尚未根据你的个人记录排序。"
+  }
+]
