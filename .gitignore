@@ -17,3 +17,4 @@ ZheZhiYanXi/
 /dist/
 *.zip
 /create_icon.py
+/.setup.lock
