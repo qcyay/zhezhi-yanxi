@@ -343,7 +343,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/api/knowledge/download':
                 raw,name=knowledge.download(body)
                 return self.respond(raw,content_type='application/octet-stream')
-            routes = {'/api/settings': lambda: save_settings(body), '/api/scan': scan, '/api/test': deepseek, '/api/chat': lambda: chat(body)}
+            routes = {'/api/settings': lambda: save_settings(body), '/api/scan': scan, '/api/test': deepseek, '/api/bocha/test': search_sources.test_connection, '/api/chat': lambda: chat(body)}
             routes.update({'/api/knowledge/upload':lambda:knowledge.upload(body,DATA/'graph_imports',SUPPORTED),'/api/knowledge/start':lambda:knowledge.start(body,research_model,extract),'/api/knowledge/status':lambda:knowledge.status(body)})
             routes['/api/recommendations/home']=lambda:recommendations.home(settings()['directory'],DATA/'recommendations')
             routes.update({'/api/recommendations/start':lambda:recommendations.start(body,settings()['directory'],research_model,extract,SUPPORTED,DATA/'recommendations'),'/api/recommendations/status':lambda:recommendations.status(body)})

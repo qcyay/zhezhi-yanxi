@@ -6,9 +6,10 @@ async function api(path, body) {
   const data = await res.json(); if (!res.ok) throw Error(data.error || '请求失败'); if(['research/start','decision/start','fusion/start','chat'].includes(path))window.dispatchEvent(new Event('research-interest-updated'));return data;
 }
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000)}
-let connectionEpoch=0;
+let connectionEpoch=0,bochaEpoch=0;
+function bochaState(state,text){const el=$('bocha-status');el.dataset.state=state;el.textContent='● '+text;}
 function connectionState(state,text){for(const id of ['api-connection-status','connection']){const el=$(id);el.dataset.state=state;el.textContent='● '+text}}
-function configView(s){$('test').disabled=false;connectionEpoch++;connectionState('unknown',s.has_key?'已保存 · 尚未测试':'未配置密钥');$('api-endpoint').value=s.api_endpoint||'https://api.deepseek.com/chat/completions';$('api-provider').value=$('api-endpoint').value.includes('modelgateway.zju.edu.cn')?'zju':$('api-endpoint').value==='https://api.deepseek.com/chat/completions'?'official':'custom';setTimeout(()=>window.prepareRecommendations?.(),1500);if($('directory').value!==s.directory&&window.invalidateRecommendations)window.invalidateRecommendations();$('bocha-status').textContent=s.has_bocha_key?'博查密钥已加密保存':'博查尚未配置';configured=s.has_key;currentModel=s.model;renderModels();$('model').value=s.model;$('directory').value=s.directory;$('policy-directory').value=s.policy_directory||'';$('directory-label').textContent=s.directory;$('key-hint').textContent=s.has_key?'已保存加密密钥。留空可保留，输入新密钥可替换。':'密钥通过 Windows 用户级加密保存在本机。'}
+function configView(s){$('test').disabled=false;connectionEpoch++;connectionState('unknown',s.has_key?'已保存 · 尚未测试':'未配置密钥');$('api-endpoint').value=s.api_endpoint||'https://api.deepseek.com/chat/completions';$('api-provider').value=$('api-endpoint').value.includes('modelgateway.zju.edu.cn')?'zju':$('api-endpoint').value==='https://api.deepseek.com/chat/completions'?'official':'custom';setTimeout(()=>window.prepareRecommendations?.(),1500);if($('directory').value!==s.directory&&window.invalidateRecommendations)window.invalidateRecommendations();bochaEpoch++;bochaState('unknown',s.has_bocha_key?'博查密钥已保存 · 尚未测试':'博查尚未配置');configured=s.has_key;currentModel=s.model;renderModels();$('model').value=s.model;$('directory').value=s.directory;$('policy-directory').value=s.policy_directory||'';$('directory-label').textContent=s.directory;$('key-hint').textContent=s.has_key?'已保存加密密钥。留空可保留，输入新密钥可替换。':'密钥通过 Windows 用户级加密保存在本机。'}
 function libraryView(lib){$('library-summary').replaceChildren(document.createTextNode(lib.files.length+' '));const small=document.createElement('small');small.textContent='份资料已读取';$('library-summary').append(small);$('file-list').replaceChildren();for(const file of lib.files){const el=document.createElement('div');el.className='file';el.textContent='▤ '+file.path;$('file-list').append(el)}if(!lib.files.length)$('file-list').textContent='点击“更新”读取本地资料。';$('issues-box').hidden=!lib.issues.length;$('issues').replaceChildren();for(const issue of lib.issues){const el=document.createElement('div');el.textContent=issue;$('issues').append(el)}}
 const views={fusion:['项目梳理','整理项目材料、交接工作并追溯来源。'],search:['资料检索','围绕调研主题发现政策、文献与报告，逐步实现多来源检索、筛选与整理。'],graph:['知识图谱','探索政策、文献、机构与研究主题之间的联系，构建可追溯的交互式知识图谱。'],decision:['辅助决策','面向高校管理需求，提供政策对标、专题分析与调研报告辅助生成。'],recommend:['文献推荐','结合研究主题与知识积累，发现值得阅读的文献和相关资料。']};
 function show(view){
@@ -69,3 +70,12 @@ $('clear-bocha').onclick=async()=>{try{configView(await api('settings',{clear_bo
 $('api-provider').onchange=()=>{const value=$('api-provider').value;if(value==='official'){$('api-endpoint').value='https://api.deepseek.com/chat/completions';$('model').value='deepseek-flash'}if(value==='zju'){$('api-endpoint').value='https://modelgateway.zju.edu.cn/v1/chat/completions';$('model').value='deepseek-v4-flash-780k-local'}markApiDirty()};
 function markApiDirty(){$('test').disabled=true;connectionEpoch++;connectionState('unknown','配置已修改 · 请先保存再测试')}
 for(const id of ['api-endpoint','api-key','model'])$(id).addEventListener('input',markApiDirty);
+
+$('bocha-key').addEventListener('input',()=>{bochaEpoch++;bochaState('unknown','密钥已修改 · 请保存并测试')});
+$('test-bocha').onclick=async()=>{
+ const epoch=++bochaEpoch,button=$('test-bocha'),key=$('bocha-key').value.trim();button.disabled=true;bochaState('testing','正在测试博查搜索…');
+ try{
+  if(key){await api('settings',{bocha_api_key:key});if(epoch!==bochaEpoch)return;$('bocha-key').value='';}
+  const result=await api('bocha/test',{});if(epoch===bochaEpoch)bochaState('success',result.message);
+ }catch(e){if(epoch===bochaEpoch)bochaState('error',e.message)}finally{button.disabled=false}
+};
