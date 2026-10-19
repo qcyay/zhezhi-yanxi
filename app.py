@@ -8,6 +8,7 @@ import secrets
 import threading
 import urllib.error
 import urllib.request
+import urllib.parse
 import webbrowser
 import zipfile
 import research
@@ -57,9 +58,23 @@ def settings():
         return json.loads(CONFIG.read_text('utf-8'))
     return {'model': 'deepseek-flash', 'directory': str(ROOT / '资料库')}
 
+DEFAULT_ENDPOINT = 'https://api.deepseek.com/chat/completions'
+
+def normalize_endpoint(value):
+    value = str(value or DEFAULT_ENDPOINT).strip().rstrip('/')
+    u = urllib.parse.urlsplit(value)
+    if u.scheme != 'https' or not u.hostname or u.username or u.password or u.query or u.fragment:
+        raise ValueError('接口地址需为 HTTPS 地址，不能包含账号、密码、查询参数或片段。')
+    if not u.path.endswith('/chat/completions'):
+        value += '/chat/completions'
+    return value
+
 def save_settings(body):
     with LOCK:
         config = settings()
+        endpoint = normalize_endpoint(body.get('api_endpoint', config.get('api_endpoint', DEFAULT_ENDPOINT)))
+        if endpoint != config.get('api_endpoint', DEFAULT_ENDPOINT) and config.get('key') and not str(body.get('api_key','')).strip() and not body.get('clear_key'):
+            raise ValueError('更换接口地址时请同时填写该平台的 API Key，避免将旧密钥发送给新平台。')
         model = str(body.get('model', config['model'])).strip()
         if not re.fullmatch(r'[\w.\-]{1,100}', model):
             raise ValueError('请输入有效的模型名称。')
@@ -79,7 +94,7 @@ def save_settings(body):
             config['key'] = protect(body['api_key'].strip())
         if config['directory'] != str(directory):
             INDEX.update(files=[], chunks=[], issues=[], directory='')
-        config.update(model=model, directory=str(directory))
+        config.update(model=model, directory=str(directory), api_endpoint=endpoint)
         tmp = CONFIG.with_suffix('.tmp')
         tmp.write_text(json.dumps(config, ensure_ascii=False), 'utf-8')
         tmp.replace(CONFIG)
@@ -87,7 +102,7 @@ def save_settings(body):
 
 def public_settings():
     config = settings()
-    return {'model': config['model'], 'directory': config['directory'], 'policy_directory':config.get('policy_directory',policies.DEFAULT_DIRECTORY), 'has_key': bool(config.get('key')), 'has_bocha_key':bool(config.get('bocha_key'))}
+    return {'api_endpoint':config.get('api_endpoint',DEFAULT_ENDPOINT), 'model': config['model'], 'directory': config['directory'], 'policy_directory':config.get('policy_directory',policies.DEFAULT_DIRECTORY), 'has_key': bool(config.get('key')), 'has_bocha_key':bool(config.get('bocha_key'))}
 
 search_sources.KEY_PROVIDER=lambda:protect(settings()['bocha_key'],True) if settings().get('bocha_key') else ''
 
@@ -103,7 +118,7 @@ def recent_interests():
  for r in sorted(rows,key=lambda r:r.get('created',0),reverse=True):unique.setdefault(r['topic'],r)
  return list(unique.values())[:12]
 recommendations.HISTORY_PROVIDER=recent_interests
-knowledge.CACHE_TAG=lambda:settings().get('model','')
+knowledge.CACHE_TAG=lambda:(settings().get('api_endpoint',DEFAULT_ENDPOINT),settings().get('model',''))
 
 def extract(path):
     return formats.cached_extract(path,_extract,DATA/'extracted_text')
@@ -209,36 +224,51 @@ def retrieve(question):
     ranked = sorted(INDEX['chunks'], key=score, reverse=True)
     return [dict(c, id=f'S{i+1}') for i, c in enumerate([c for c in ranked if score(c) > 0][:8])]
 
-def deepseek(messages=None, structured=False):
-    config = settings()
+def deepseek(messages=None, structured=False, _config=None):
+    config = dict(_config or settings())
+    if messages is None:return test_connection(config)
+    endpoint = normalize_endpoint(config.get('api_endpoint', DEFAULT_ENDPOINT))
     if not config.get('key'):
-        raise ValueError('请先在设置中保存 DeepSeek API Key。')
+        raise ValueError('请先在设置中保存 API Key。')
     key = protect(config['key'], True)
     params = {'model': config['model'], 'messages': messages, 'stream': False, 'max_tokens': 4096}
     if structured:
         params['max_tokens'] = 8192
         params['response_format'] = {'type': 'json_object'}
-        if config['model'].startswith('deepseek-v4') or config['model'] in ('deepseek-flash', 'deepseek-pro', 'deepseek-chat'):
+        if urllib.parse.urlsplit(endpoint).hostname == 'api.deepseek.com' and (config['model'].startswith('deepseek-v4') or config['model'] in ('deepseek-flash', 'deepseek-pro', 'deepseek-chat')):
             params['thinking'] = {'type': 'disabled'}
         else:
             params['max_tokens'] = 8192
-    payload = None if messages is None else json.dumps(params).encode()
-    request = urllib.request.Request('https://api.deepseek.com/' + ('models' if messages is None else 'chat/completions'), data=payload, headers={'Authorization': 'Bearer '+key, 'Content-Type': 'application/json'})
+    payload = json.dumps(params).encode()
+    request = urllib.request.Request(endpoint, data=payload, headers={'Authorization': 'Bearer '+key, 'Content-Type': 'application/json'})
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             result = json.load(response)
     except urllib.error.HTTPError as e:
-        tips = {401: 'API Key 无效，请重新保存。', 402: 'DeepSeek 账户余额不足。', 429: '请求过于频繁，请稍后重试。', 400: '模型名称或请求参数不受支持，请检查设置。', 404: '模型不存在，请检查模型名称。'}
-        raise ValueError(tips.get(e.code, f'DeepSeek 服务返回 HTTP {e.code}，请稍后重试。'))
+        tips = {401: '当前网关拒绝认证（401）。请核对接口地址与该平台的密钥是否匹配。', 403: '当前网关拒绝访问（403），请检查账号权限或校园网络要求。', 402: '当前平台账户额度不足。', 429: '请求过于频繁，请稍后重试。', 400: '模型名称或请求参数不受支持，请检查设置。', 404: '接口路径或模型不存在，请检查接口地址和模型名称。'}
+        raise ValueError(tips.get(e.code, f'模型服务返回 HTTP {e.code}，请稍后重试。'))
     except (urllib.error.URLError, TimeoutError):
-        raise ValueError('连接 DeepSeek 超时或网络不可用，请检查网络后重试。')
-    if messages is None:
-        models = [m['id'] for m in result.get('data', [])]
-        return {'models': models, 'message': '密钥有效；模型列表已获取。' if config['model'] in models else '密钥有效；当前模型未出现在列表中，请选择可用模型。'}
+        raise ValueError('连接模型网关超时或网络不可用，请检查地址、网络或校园 VPN 后重试。')
     answer = result.get('choices', [{}])[0].get('message', {}).get('content')
     if not answer:
         raise ValueError('模型未返回正文，请重试或切换模型。')
     return {'answer': answer, 'usage': result.get('usage', {}), 'finish_reason': result.get('choices', [{}])[0].get('finish_reason')}
+
+def test_connection(config=None):
+    config = dict(config or settings())
+    # A successful models listing alone does not prove the configured model can answer.
+    deepseek([{'role':'user','content':'请只回复 OK，用于连接测试。'}], _config=config)
+    models = [config['model']]
+    note = '当前模型已通过实际对话测试。'
+    endpoint = normalize_endpoint(config.get('api_endpoint', DEFAULT_ENDPOINT))
+    request = urllib.request.Request(endpoint[:-len('chat/completions')]+'models', headers={'Authorization':'Bearer '+protect(config['key'],True)})
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response: data = json.load(response)
+        available = [m['id'] for m in data.get('data',[]) if isinstance(m,dict) and isinstance(m.get('id'),str)]
+        models = list(dict.fromkeys(models+available))
+    except Exception:
+        note += ' 网关未提供可用模型列表，可手动填写模型名。'
+    return {'models':models, 'message':note, 'connected':True}
 
 def research_model(messages):
     return deepseek(messages, structured=True)

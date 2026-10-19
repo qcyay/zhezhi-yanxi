@@ -41,3 +41,12 @@ body:not(.is-home) .source-text,body:not(.is-home) .article-text,body:not(.is-ho
 body:not(.is-home) .continuous-document p,body:not(.is-home) .message .content,body:not(.is-home) .source-document p{font-size:17px;line-height:1.95}
 body:not(.is-home) #question,body:not(.is-home) #decision-wizard input:not([type=file]),body:not(.is-home) #decision-wizard textarea{font-size:16px;line-height:1.8}
 body:not(.is-home) #decision-wizard label,body:not(.is-home) .decision-types p,body:not(.is-home) .graph-layer-controls,body:not(.is-home) .result-sort,dialog label{font-size:15px}
+
+.api-state{padding:12px 14px;border-radius:9px;margin:12px 0;font-size:15px;background:#edf1f5;color:#52647d}
+[data-state="success"]{color:#17663e!important;background:#e8f5ed!important}
+[data-state="error"]{color:#a62d34!important;background:#fceced!important}
+[data-state="testing"]{color:#896000!important;background:#fff6dc!important}
+[data-state="unknown"]{color:#52647d!important}
+#api-provider{display:block;width:100%;padding:10px;border:1px solid #d7e2f0;border-radius:8px;margin-top:8px}
+
+dialog {max-height:calc(100dvh - 40px);overflow-y:auto;box-sizing:border-box;}
