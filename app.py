@@ -5,6 +5,7 @@ import json
 import os
 import re
 import secrets
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -29,6 +30,7 @@ from xml.etree import ElementTree
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('LOCALAPPDATA', str(ROOT))) / 'ZheZhiYanXi'
 DATA.mkdir(parents=True, exist_ok=True)
+DEFAULT_LIBRARY = (DATA if getattr(sys, 'frozen', False) else ROOT) / '资料库'
 CONFIG = DATA / 'settings.json'
 TOKEN = secrets.token_urlsafe(32)
 LOCK = threading.RLock()
@@ -56,7 +58,7 @@ def protect(value, decrypt=False):
 def settings():
     if CONFIG.exists():
         return json.loads(CONFIG.read_text('utf-8'))
-    return {'model': 'deepseek-flash', 'directory': str(ROOT / '资料库')}
+    return {'model': 'deepseek-flash', 'directory': str(DEFAULT_LIBRARY)}
 
 DEFAULT_ENDPOINT = 'https://api.deepseek.com/chat/completions'
 
@@ -366,8 +368,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self.respond({'error': '处理失败，请检查资料和设置后重试。'}, 500)
 
-if __name__ == '__main__':
-    (ROOT/'资料库').mkdir(exist_ok=True)
+def main():
+    DEFAULT_LIBRARY.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     url = f'http://127.0.0.1:{server.server_port}'
     print(f'浙智研析已启动：{url}\n关闭此窗口即可停止服务。', flush=True)
@@ -377,3 +379,6 @@ if __name__ == '__main__':
         server.serve_forever()
     except KeyboardInterrupt:
         server.server_close()
+
+if __name__ == '__main__':
+    main()

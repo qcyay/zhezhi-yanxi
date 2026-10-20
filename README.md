@@ -1,6 +1,6 @@
 # 浙智研析 · ZheZhi YanXi
 
-**v1.0.4｜面向高校研究与管理工作的本地智能研究工作台**
+**v1.0.5｜面向高校研究与管理工作的本地智能研究工作台**
 
 把分散的政策文件、研究文献和项目材料连接起来，完成资料发现、项目梳理、关系探索与辅助分析。以 DeepSeek 为大模型底座，浏览器提供交互界面，Python 服务在本机运行。
 
@@ -19,7 +19,15 @@
 
 ## 快速开始
 
-### 双击启动
+### EXE 便携版（无需安装 Python）
+
+使用 `ZheZhiYanXi-1.0.5-Windows-x64.zip`，**完整解压后双击 `ZheZhiYanXi.exe`**。必须保留旁边的 `_internal` 文件夹；向其他人分发时发送完整 ZIP。Python、文档解析依赖和 OCR 模型已包含，无需首次联网安装组件。
+
+浏览器会自动打开界面，关闭启动窗口即可停止服务。模型调用与在线检索仍需要联网和用户自己的 API Key。本地 PDF/Excel 解析与 OCR 可离线运行。EXE 默认资料目录为 `%LOCALAPPDATA%\ZheZhiYanXi\资料库`，已有设置继续复用。
+
+在解压目录运行 `ZheZhiYanXi.exe --self-test` 可检查打包组件。适用 Windows 10/11 x64，当前二进制未做代码签名。源码下载 ZIP 与 EXE 便携 ZIP 是两个不同产物。
+
+### 源码版双击启动
 
 下载并解压完整仓库后双击 `start.cmd`。启动器优先复用已准备的项目 Python，再检测项目虚拟环境、当前用户的 Codex Python、Python 启动器、PATH、注册表和常见 Python 安装位置。它与 `启动.ps1` 使用同一套启动流程。
 
@@ -51,7 +59,7 @@ py -3.12 -m venv .venv
 
 浏览器会自动打开本地页面。完成首次安装后，双击 **`start.cmd`** 即可启动；关闭服务终端会停止应用。也可使用 `启动.ps1`，它优先选择项目虚拟环境，并兼容原开发环境的 Python。
 
-当前为本地 Python 应用，**不是独立 EXE 安装包，也不是可直接部署到 GitHub Pages 的静态网站**。服务只监听 `127.0.0.1`，使用动态端口；如需手动打开页面，查看终端显示的地址。
+应用提供源码版和 EXE 便携版，均为本地服务，不能直接部署到 GitHub Pages。服务只监听 `127.0.0.1`，使用动态端口；如需手动打开页面，查看终端显示的地址。
 
 ### 首次配置
 
@@ -110,6 +118,16 @@ DeepSeek 和可选第三方 API 的费用由相应账户承担。配置好模型
 生成的分析和引用需结合原文核对，尤其是正式决策、政策效力及文献引用场景。
 
 ## 开发与验证
+
+构建 EXE（需要 Windows x64 和 64 位 Python 3.12；以下命令在项目目录执行）：
+
+```powershell
+python -m pip install --target .deps -r requirements.txt
+python -m pip install --target .builddeps pyinstaller==6.22.3
+python build_desktop.py
+```
+
+输出位于 `dist/`：程序目录、完整便携 ZIP 和 SHA-256 校验文件。构建只收集指定程序资源与第三方组件，不包含用户资料、缓存或密钥。
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt

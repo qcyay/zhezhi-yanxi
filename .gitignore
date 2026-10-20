@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 .deps/
 .runtime/
+.builddeps/
+/build/
 .env
 .env.*
 *.log
