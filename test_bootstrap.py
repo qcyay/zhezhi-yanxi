@@ -1,7 +1,19 @@
+import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch,Mock
 import bootstrap
 class BootstrapTests(unittest.TestCase):
+ def setUp(self):
+  self.original_cwd=os.getcwd()
+  self.temporary=tempfile.TemporaryDirectory()
+  self.root_patch=patch.object(bootstrap,'ROOT',Path(self.temporary.name))
+  self.root_patch.start()
+ def tearDown(self):
+  os.chdir(self.original_cwd)
+  self.root_patch.stop()
+  self.temporary.cleanup()
  def test_existing_dependencies_launch_without_install(self):
   with patch.object(bootstrap,'missing_dependencies',return_value=[]),patch.object(bootstrap.sys,'argv',['bootstrap.py','--no-browser']),patch.object(bootstrap.runpy,'run_path') as run,patch.object(bootstrap.subprocess,'run') as pip:
    self.assertEqual(bootstrap.main(),0);pip.assert_not_called();run.assert_called_once();self.assertIn('--no-browser',bootstrap.sys.argv)
