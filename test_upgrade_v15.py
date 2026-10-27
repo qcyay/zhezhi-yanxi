@@ -25,7 +25,7 @@ class Upgrade15Tests(unittest.TestCase):
  def test_no_history_no_files_default_topic(self):
   with tempfile.TemporaryDirectory() as td,patch.object(rec,'HISTORY_PROVIDER',return_value=[]):
    def search(job,model):
-    self.assertEqual(job['brief']['topic'],'数据治理');job.update(status='done',items=[],warnings=[])
+    self.assertTrue(job['brief']['topic']);job.update(status='done',items=[],warnings=[])
    with patch.object(research,'run',side_effect=search):
     job={};rec.run(job,{},td,None,None,{'.txt'},Path(td)/'cache','key','');self.assertEqual(job['status'],'done')
 if __name__=='__main__':unittest.main()

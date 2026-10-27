@@ -4,7 +4,9 @@ from pathlib import Path
 import fusion,research
 HISTORY_PROVIDER=lambda:[]
 JOBS={};ACTIVE={};LOCK=threading.RLock();POOL=concurrent.futures.ThreadPoolExecutor(max_workers=1)
-def identity(item):return (item.get('doi') or item.get('url') or item['title']).lower().rstrip('/')
+def identity(item):
+ if item.get('type')=='policy':return 'policy:'+re.sub(r'\s+','',re.split(r'[-_|—]',item['title'])[0]).lower()
+ return (item.get('doi') or item.get('url') or item['title']).lower().rstrip('/')
 def date_key(item):
  parts=re.findall(r'\d+',str(item.get('date','')))[:3]
  try:return datetime.date(int(parts[0]),int(parts[1]) if len(parts)>1 else 1,int(parts[2]) if len(parts)>2 else 1).toordinal()
@@ -45,9 +47,9 @@ def run(job,body,directory,model,extract,supported,storage,key,manual):
   try:saved=json.loads(path.read_text('utf-8'))
   except (OSError,ValueError):pass
   if not isinstance(saved,dict):saved={}
-  if saved.get('fingerprint')!=fingerprint:saved={}
+  if saved.get('fingerprint')!=fingerprint or saved.get('schema')!=2:saved={}
 
-  if saved and not body.get('next') and time.time()-saved.get('fetched_at',saved.get('updated',0))<21600:
+  if saved and len(saved.get('current',{}).get('items',[]))>=12 and not body.get('next') and time.time()-saved.get('fetched_at',saved.get('updated',0))<21600:
    job.update(saved['current'],status='done',progress=100,message='已加载本地缓存推荐');return
   topics=saved.get('topics',[])
   if not files and not topics:topics=[{'name':r['topic'][:100],'files':[],'basis':r.get('source','使用记录')} for r in history] or [{'name':'数据治理','files':[],'basis':'初始关注方向，可自行修改'}]
@@ -71,9 +73,11 @@ def run(job,body,directory,model,extract,supported,storage,key,manual):
    except ValueError:pass
    if not topics:topics=[{'name':Path(f['name']).stem[:40],'files':[f['name']],'basis':'仅依据文件名'} for f in files[:4] if len(Path(f['name']).stem)>=2]
   if not topics:raise ValueError('尚未识别出可用主题，请填写一个关注主题。')
-  seen=set(saved.get('seen',[]));pool_items=saved.get('pool',[]);available=[i for i in pool_items if identity(i) not in seen];topic_index=saved.get('topic_index',0)
+  seen=set(saved.get('seen',[]))
+  if not body.get('next'):seen.difference_update(identity(i) for i in saved.get('current',{}).get('items',[]))
+  pool_items=saved.get('pool',[]);available=[i for i in pool_items if identity(i) not in seen];topic_index=saved.get('topic_index',0)
   warnings=list(saved.get('source_warnings',[]));fetched_at=saved.get('fetched_at',0)
-  if not available or time.time()-saved.get('fetched_at',saved.get('updated',0))>=21600:
+  if len(available)<12 or time.time()-saved.get('fetched_at',saved.get('updated',0))>=21600:
    topic=topics[topic_index%len(topics)];topic_index+=1
    job.update(progress=20,message='正在发现近期资料：'+topic['name'],topics=topics)
    brief=research.validate({'topic':topic['name'],'types':['papers','policy','news'],'period':'1','include_older_policies':False,'use_local_policies':False,'purpose':'发现与资料库相关的近期研究与公开文件'})
@@ -82,15 +86,46 @@ def run(job,body,directory,model,extract,supported,storage,key,manual):
    job['_child']=child
    research.run(child,model)
    job.pop('_child',None)
-   if child['status']!='done':raise ValueError(child.get('message','推荐检索未完成，请重试。'))
-   warnings=list(child.get('warnings',[]));fetched_at=time.time()
-   pool_items=[]
+   if child['status']!='done':
+    warnings.append(child.get('message','本次检索暂不可用，继续补充其他相关方向。'));child['items']=[]
+   warnings.extend(child.get('warnings',[]));fetched_at=time.time()
+   pool_items=list(pool_items)
    for item in child['items']:
     short={k:v for k,v in item.items() if not k.startswith('_') and k not in ('content','local_path')}
     excerpt=research.clean(item.get('excerpt') or item.get('evidence_excerpt',''),300)
     short.update(abstract=excerpt or '来源未提供足够摘要，请访问原始来源核对内容。',abstract_kind='来源摘要节选' if item.get('type')=='papers' and item.get('excerpt') else '正文匹配片段' if excerpt else '暂无摘要',related_files=topic['files'],topic=topic['name'],recommendation_reason=item.get('reason') or item.get('score_reason') or '与资料库关注主题相关')
     pool_items.append(short)
    available=[i for i in pool_items if identity(i) not in seen]
+  # Fill short batches with related queries, preserving genuinely new results.
+  if len({identity(i) for i in available})<12:
+   primary=topics[(topic_index-1)%len(topics)]
+   variants=list(dict.fromkeys([t['name'] for t in topics]+research.policies.expanded_terms(primary['name'])))
+   try:
+    if model is None:raise ValueError('未配置模型')
+    expansion=fusion.prompt('为研究主题提出最多4个相关检索方向，覆盖同义词、实施案例、配套制度或相邻研究问题。返回 queries 字符串数组。不得输出网址或资料条目。',{'topic':primary['name']},model,require_citations=False)
+    variants.extend(q.strip() for q in expansion.get('queries',[]) if isinstance(q,str) and 2<=len(q.strip())<=100)
+   except (ValueError,TypeError):pass
+   for query in list(dict.fromkeys(variants))[:6]:
+    if len({identity(i) for i in available})>=12:break
+    job.update(message='正在补充相关资料…')
+    brief=research.validate({'topic':query,'types':['papers','policy','news'],'period':'all','include_older_policies':True,'use_local_policies':False,'purpose':'补充与 '+primary['name']+' 相关的背景、制度与实践资料'})
+    brief['_recommendation']=True
+    child={'id':secrets.token_urlsafe(16),'brief':brief,'status':'running','items':[],'created':time.time(),'policy_directory':'','progress_percent':0}
+    job['_child']=child;research.run(child,model);job.pop('_child',None)
+    if child['status']!='done':continue
+    for item in child['items']:
+     if identity(item) in {identity(x) for x in pool_items}:continue
+     short={k:v for k,v in item.items() if not k.startswith('_') and k not in ('content','local_path')}
+     short.update(abstract=research.clean(item.get('excerpt') or item.get('evidence_excerpt',''),300) or '请访问原始来源阅读。',abstract_kind='来源内容节选',related_files=primary['files'],topic=primary['name'],recommendation_reason=item.get('reason') or '与关注主题相关的延伸资料')
+     pool_items.append(short)
+     if identity(short) not in seen:available.append(short)
+   if len({identity(i) for i in available})<12:
+    warnings.append('已扩展相关主题并补充历史资料；当前可核验的新资料仍不足12条，请稍后刷新。')
+  if len({identity(i) for i in available})<12:
+   fresh_ids={identity(i) for i in available}
+   reused=[dict(i,previously_recommended=True) for i in pool_items if identity(i) not in fresh_ids]
+   if reused:
+    available.extend(reused);warnings.append('新资料不足时补充此前已核验的相关资料，发布日期仍以来源为准。')
   unique={identity(i):i for i in available};available=sorted(unique.values(),key=lambda i:(date_key(i),i.get('relevance',0)),reverse=True)
   batch=[]
   for kind in ('papers','policy','news'):batch.extend([i for i in available if i['type']==kind][:3])
@@ -101,7 +136,7 @@ def run(job,body,directory,model,extract,supported,storage,key,manual):
   missing=[research.TYPES[k] for k in ('papers','policy','news') if not any(i['type']==k for i in batch)]
   if missing:warnings.append('本批暂无：'+'、'.join(missing))
   current={'items':batch,'topics':topics,'warnings':warnings,'library_count':len(files),'updated':time.time(),'message':'推荐已更新' if batch else '暂无新的可核验推荐'}
-  data={'fingerprint':fingerprint,'topics':topics,'pool':pool_items,'seen':sorted(seen)[-3000:],'topic_index':topic_index,'updated':time.time(),'fetched_at':fetched_at,'source_warnings':source_warnings,'current':current}
+  data={'schema':2,'fingerprint':fingerprint,'topics':topics,'pool':pool_items,'seen':sorted(seen)[-3000:],'topic_index':topic_index,'updated':time.time(),'fetched_at':fetched_at,'source_warnings':source_warnings,'current':current}
   storage.mkdir(parents=True,exist_ok=True);temp=path.with_suffix('.tmp');temp.write_text(json.dumps(data,ensure_ascii=False),'utf-8');temp.replace(path)
   job.update(current,status='done',progress=100)
  except Exception as e:job.pop('_child',None);job.update(status='error',message=str(e) if isinstance(e,ValueError) else '推荐生成未完成，请稍后重试。')

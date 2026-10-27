@@ -10,7 +10,10 @@ DEFAULT_DIRECTORY=''
 DATA_GOVERNANCE=['数据治理','数据管理','数据安全','数据共享','公共数据','政务数据','科学数据','教育数据','数据分类','数据标准','个人信息保护','网络安全','教育数字化','管理信息化','基础数据']
 
 def expanded_terms(topic):
-    return DATA_GOVERNANCE if '数据治理' in topic else []
+    if '数据治理' in topic:return DATA_GOVERNANCE
+    if any(w in topic for w in ('数字化','信息化','智慧校园')) and any(w in topic for w in ('高校','教育','大学','校园')):
+        return ['教育数字化','高校数字化转型','教育信息化','智慧校园','数字校园','高等教育数字化','数字化转型']
+    return []
 
 def normalize(text):
     text=unicodedata.normalize('NFKC',text).translate(str.maketrans({'⺠':'民','⻓':'长','⻔':'门','⻅':'见','⻔':'门','⻢':'马','⻚':'页','⻛':'风','⻋':'车'}))

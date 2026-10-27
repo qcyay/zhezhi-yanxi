@@ -15,7 +15,7 @@ def search(query,freshness='noLimit',count=30):
  if not isinstance(data,dict):raise ValueError('博查返回内容格式异常。')
  payload=data.get('data',data)
  if not isinstance(payload,dict) or ('code' in data and data['code'] not in (200,'200',0,'0')):raise ValueError('博查搜索未返回可用结果，请检查配置。')
- return [{'title':r.get('name',''),'url':r.get('url',''),'excerpt':r.get('snippet') or r.get('summary',''),'source':'博查搜索 API','date':r.get('datePublished','')[:10]} for r in payload.get('webPages',{}).get('value',[])]
+ return [{'title':r.get('name',''),'url':r.get('url',''),'excerpt':r.get('snippet') or r.get('summary',''),'source':'博查搜索 API','date':str(r.get('datePublished') or '')[:10]} for r in (payload.get('webPages') or {}).get('value',[]) or []]
 
 
 def test_connection():

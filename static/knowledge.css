@@ -50,3 +50,6 @@ body:not(.is-home) #decision-wizard label,body:not(.is-home) .decision-types p,b
 #api-provider{display:block;width:100%;padding:10px;border:1px solid #d7e2f0;border-radius:8px;margin-top:8px}
 
 dialog {max-height:calc(100dvh - 40px);overflow-y:auto;box-sizing:border-box;}
+
+/* Balance the landing content while retaining scroll on short screens. */
+@media(min-width:901px) and (min-height:780px){.is-home .home-view{padding-top:clamp(70px,12vh,145px);padding-bottom:55px;}.is-home .home-cards{margin-top:clamp(28px,4vh,55px);}}

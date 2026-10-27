@@ -132,7 +132,7 @@ def neighbors(n,limit):
     result.extend((from_openalex(x),'out','OpenAlex 收录参考文献') for x in data.get('results',[]))
    data=request('https://api.openalex.org/works?'+urllib.parse.urlencode({'filter':'cites:'+r['id'].rsplit('/',1)[-1],'per-page':limit,'sort':'cited_by_count:desc'}))
    result.extend((from_openalex(x),'in','OpenAlex 收录引用本文的文献') for x in data.get('results',[]))
-   return result,notes
+   if any(direction=='out' for _,direction,_ in result):return result,notes
   except Exception:notes.append('部分 OpenAlex 引文未取得，尝试备用数据库。')
   if n.get('doi'):
    try:

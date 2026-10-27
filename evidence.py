@@ -147,7 +147,7 @@ def read_article(url):
 
 def landing_page(url,title):
     path=urllib.parse.urlsplit(url).path.lower().rstrip('/')
-    return path in ('','/en','/english','/cn','/index.html','/index.htm','/en/index.html','/qggxmd') or bool(re.search(r'^(?:首页|网站首页|全国普通高等学校名单|清华大学|tsinghua university)(?:\s*[-|—].*)?$',title.strip(),re.I))
+    return bool(re.search(r'/(?:index|node_\d+)\.s?html?$',path)) or bool(re.match(r'^(?:主页|首页)\s*[>＞]',title)) or path in ('','/en','/english','/cn','/index.html','/index.htm','/en/index.html','/qggxmd') or bool(re.search(r'^(?:首页|网站首页|全国普通高等学校名单|清华大学|tsinghua university)(?:\s*[-|—].*)?$',title.strip(),re.I))
 
 def terms(plan,brief):
     zh=plan.get('core_terms',[]);en=plan.get('english_terms',[])
@@ -157,6 +157,7 @@ def terms(plan,brief):
         if isinstance(word,str) and 2<=len(word)<=30 and word in brief['topic']:values.append(word)
     for word in en if isinstance(en,list) else []:
         if isinstance(word,str) and 3<=len(word)<=60:values.append(word)
+    values.extend(policies.expanded_terms(brief['topic']))
     stop={'高校','大学','研究','政策','文件','新闻','教育','higher education','university','universities','research','policy','news'}
     return list(dict.fromkeys(w.lower().strip() for w in values if w.lower().strip() not in stop))[:12]
 
@@ -177,9 +178,14 @@ def verify(item,plan,brief):
         if len(article['text'])<240 and not item.get('scanned'):return None,'文章内容不足'
         item.update(content=article['text'],content_status=article['content_status'],truncated=article['truncated'],fetched_at=article['fetched_at'],url=article['url'])
         item['title']=article['title'] or item['title'];item['date']=article['date'] or item['date']
+        if not item['date']:
+            dated=re.search(r'(?:/|t)(20\d{2})(\d{2})(\d{2})(?:_|/|\.)',item['url'])
+            if dated:
+                try:item['date']=dt.date(int(dated[1]),int(dated[2]),int(dated[3])).isoformat()
+                except ValueError:pass
         if item['type']=='policy' and not local and not re.search(r'意见|通知|办法|条例|规定|方案|指南|规划|细则|决定|标准|指引|法|policy|guideline|regulation|act\b',item['title'],re.I):return None,'不符合政策文件类型'
         if item['type']=='news' and not item['date']:return None,'无法确认新闻发布日期'
-        if item['type']=='news' and not re.search(r'记者|报道|通讯员|消息|获悉|召开|举行|宣布|启动|揭牌|reported|announced|launch|said|according|news',item['title']+'\n'+item['content'][:4000],re.I):return None,'缺少具体新闻报道特征'
+        if item['type']=='news' and not re.search(r'记者|报道|通讯员|消息|获悉|召开|举行|宣布|启动|揭牌|reported|announced|launch|said|according|news|案例|实践|经验|转型|访谈|观点|解读|研究发现',item['title']+'\n'+item['content'][:4000],re.I):return None,'缺少具体新闻报道特征'
     else:
         item.update(content=item.get('excerpt',''),content_status='数据库摘要（非全文）',truncated=False)
     if brief['period']!='all' and item.get('date'):
